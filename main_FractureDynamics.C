@@ -23,6 +23,7 @@
 #include "SIMSolverTS.h"
 #include "GenAlphaSIM.h"
 #include "NonLinSIM.h"
+#include "ASMmxBase.h"
 #include "ASMstruct.h"
 #include "AppCommon.h"
 
@@ -71,12 +72,13 @@ private:
 /*!
   \brief Creates the combined fracture simulator and launches the simulation.
   \param[in] infile The input file to parse
+  \param[in] fields Number of fields per basis
 */
 
 template<class Dim, class Integrator, class ElSolver,
          template<class T1, class T2> class Cpl,
          template<class T1> class Solver=SIMSolver>
-int runSimulatorCombined (char* infile)
+int runSimulatorCombined (char* infile, std::vector<unsigned char> fields)
 {
   typedef SIMDynElasticity<Dim,Integrator,ElSolver> SIMElastoDynamics;
   typedef SIMPhaseField<Dim>                        SIMCrackField;
@@ -87,7 +89,7 @@ int runSimulatorCombined (char* infile)
   IFEM::cout <<"\n\n0. Parsing input file(s)."
              <<"\n========================="<< std::endl;
 
-  SIMElastoDynamics elastoSim;
+  SIMElastoDynamics elastoSim(fields);
   ASMstruct::resetNumbering();
   if (!elastoSim.read(infile))
     return 1;
@@ -138,11 +140,13 @@ int runSimulatorCombined (char* infile)
 /*!
   \brief Creates and launches a stand-alone elasticity simulator (no coupling).
   \param[in] infile The input file to parse
+  \param[in] fields Number of fields per basis
   \param[in] context Input-file context for the time integrator
 */
 
 template<class Dim, class Integrator=NewmarkSIM, class ElSolver>
-int runSimulatorIsolated (char* infile, const char* context = "newmarksolver")
+int runSimulatorIsolated (char* infile, std::vector<unsigned char> fields,
+                          const char* context = "newmarksolver")
 {
   typedef SIMDynElasticity<Dim,Integrator,ElSolver> SIMElastoDynamics;
 
@@ -150,7 +154,7 @@ int runSimulatorIsolated (char* infile, const char* context = "newmarksolver")
   IFEM::cout <<"\n\n0. Parsing input file(s)."
              <<"\n========================="<< std::endl;
 
-  SIMElastoDynamics elastoSim;
+  SIMElastoDynamics elastoSim(fields);
   if (!elastoSim.read(infile))
     return 1;
 
@@ -204,22 +208,25 @@ public:
 /*!
   \brief Creates the combined fracture simulator and launches the simulation.
   \param[in] infile The input file to parse
+  \param[in] fields Number of fields per basis
   \param[in] timeslabs Use time-slab adaptive solver
 */
 
 template<class Dim, class Integrator, class ElSolver,
          template<class T1, class T2> class Cpl>
-int runSimulatorDispatchCombined (char* infile, bool timeslabs)
+int runSimulatorDispatchCombined (char* infile, std::vector<unsigned char> fields,
+                                  bool timeslabs)
 {
   if (timeslabs)
-    return runSimulatorCombined<Dim,Integrator,ElSolver,Cpl,SIMSolverTS>(infile);
-  return runSimulatorCombined<Dim,Integrator,ElSolver,Cpl>(infile);
+    return runSimulatorCombined<Dim,Integrator,ElSolver,Cpl,SIMSolverTS>(infile, fields);
+  return runSimulatorCombined<Dim,Integrator,ElSolver,Cpl>(infile, fields);
 }
 
 
 /*!
   \brief Creates the combined fracture simulator and launches the simulation.
   \param[in] infile The input file to parse
+  \param[in] poroel Whether to run with poroelasticity
   \param[in] integrator The time integrator to use (0=linear quasi-static,
              no phase-field coupling, 1=linear Newmark, 2=Generalized alpha)
   \param[in] coupling Coupling flag (0: none, 1: staggered, 2: semi-implicit)
@@ -227,22 +234,32 @@ int runSimulatorDispatchCombined (char* infile, bool timeslabs)
 */
 
 template<class Dim, class ElSolver>
-int runSimulatorDispatch (char* infile, char integrator, char coupling, bool timeslabs)
+int runSimulatorDispatch (char* infile, bool poroel,
+                          char integrator, char coupling, bool timeslabs)
 {
+  std::vector<unsigned char> fields;
+  if (!poroel)
+    // Mixed not supported for non-poroel
+    fields = { Dim::dimension };
+  else if (ASMmxBase::Type > ASMmxBase::NONE)
+    fields = { Dim::dimension, 1 };
+  else
+    fields = { Dim::dimension + 1 };
+
   if (integrator == 0) {
-    return runSimulatorIsolated<Dim,LinSIM,ElSolver>(infile, "staticsolver");
+    return runSimulatorIsolated<Dim,LinSIM,ElSolver>(infile, fields, "staticsolver");
   } else if (integrator == 1) {
     if (coupling == 0)
-      return runSimulatorIsolated<Dim,NewmarkSIM,SIMElasticityWrap<Dim>>(infile);
+      return runSimulatorIsolated<Dim,NewmarkSIM,SIMElasticityWrap<Dim>>(infile, fields);
     else if (coupling == 1)
-      return runSimulatorDispatchCombined<Dim,NewmarkSIM,ElSolver,SIMCoupled>(infile, timeslabs);
-    return runSimulatorDispatchCombined<Dim,NewmarkSIM,ElSolver,SIMCoupledSI>(infile, timeslabs);
+      return runSimulatorDispatchCombined<Dim,NewmarkSIM,ElSolver,SIMCoupled>(infile, fields, timeslabs);
+    return runSimulatorDispatchCombined<Dim,NewmarkSIM,ElSolver,SIMCoupledSI>(infile, fields, timeslabs);
   }
   if (coupling == 0)
-    return runSimulatorIsolated<Dim,GenAlphaSIM,SIMElasticityWrap<Dim>>(infile);
+    return runSimulatorIsolated<Dim,GenAlphaSIM,SIMElasticityWrap<Dim>>(infile, fields);
   else if (coupling == 1)
-    return runSimulatorDispatchCombined<Dim,GenAlphaSIM,ElSolver,SIMCoupled>(infile, timeslabs);
-  return runSimulatorDispatchCombined<Dim,GenAlphaSIM,ElSolver,SIMCoupledSI>(infile, timeslabs);
+    return runSimulatorDispatchCombined<Dim,GenAlphaSIM,ElSolver,SIMCoupled>(infile, fields, timeslabs);
+  return runSimulatorDispatchCombined<Dim,GenAlphaSIM,ElSolver,SIMCoupledSI>(infile, fields, timeslabs);
 }
 
 
@@ -261,6 +278,7 @@ int main (int argc, char** argv)
   bool twoD = false;
   bool poroel = false;
   bool adaptive = false;
+  ASMmxBase::Type = ASMmxBase::NONE;
 
   IFEM::Init(argc,argv);
 
@@ -269,6 +287,8 @@ int main (int argc, char** argv)
       ; // ignore the obsolete option
     else if (!strcmp(argv[i],"-2D"))
       twoD = SIMElasticity<SIM2D>::planeStrain = true;
+    else if (!strcmp(argv[i],"-mixed"))
+      ASMmxBase::Type = ASMmxBase::FULL_CONT_RAISE_BASIS1;
     else if (!strcmp(argv[i],"-nocrack"))
       coupling = 0;
     else if (!strcmp(argv[i],"-semiimplicit"))
@@ -294,7 +314,7 @@ int main (int argc, char** argv)
   {
     std::cout <<"usage: "<< argv[0]
               <<" <inputfile> [-dense|-spr|-superlu[<nt>]|-samg|-petsc]\n"
-              <<"       [-lag|-spec|-LR] [-2D] [-nGauss <n>]\n      "
+              <<"       [-lag|-spec|-LR] [-2D] [-mixed] [-nGauss <n>]\n      "
               <<" [-nocrack|-semiimplicit] [-static|-GA] [-poro] [-adaptive]\n"
               <<"       [-vtf <format> [-nviz <nviz>] [-nu <nu>] [-nv <nv]"
               <<" [-nw <nw>]] [-hdf5] [-principal]\n"<< std::endl;
@@ -314,11 +334,11 @@ int main (int argc, char** argv)
 
   // Dispatch based on dimension and elasticity solver
   if (twoD && poroel)
-    return runSimulatorDispatch<SIM2D, SIMPoroElasticity<SIM2D>>(infile,integrator,coupling,adaptive);
+    return runSimulatorDispatch<SIM2D, SIMPoroElasticity<SIM2D>>(infile,poroel,integrator,coupling,adaptive);
   else if (twoD && !poroel)
-    return runSimulatorDispatch<SIM2D, SIMElasticityWrap<SIM2D>>(infile,integrator,coupling,adaptive);
+    return runSimulatorDispatch<SIM2D, SIMElasticityWrap<SIM2D>>(infile,poroel,integrator,coupling,adaptive);
   else if (poroel)
-    return runSimulatorDispatch<SIM3D, SIMPoroElasticity<SIM3D>>(infile,integrator,coupling,adaptive);
+    return runSimulatorDispatch<SIM3D, SIMPoroElasticity<SIM3D>>(infile,poroel,integrator,coupling,adaptive);
   else
-    return runSimulatorDispatch<SIM3D, SIMElasticityWrap<SIM3D>>(infile,integrator,coupling,adaptive);
+    return runSimulatorDispatch<SIM3D, SIMElasticityWrap<SIM3D>>(infile,poroel,integrator,coupling,adaptive);
 }
