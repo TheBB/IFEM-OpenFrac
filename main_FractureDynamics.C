@@ -76,7 +76,7 @@ private:
 template<class Dim, class Integrator, class ElSolver,
          template<class T1, class T2> class Cpl,
          template<class T1> class Solver=SIMSolver>
-int runSimulator2 (char* infile)
+int runSimulatorCombined (char* infile)
 {
   typedef SIMDynElasticity<Dim,Integrator,ElSolver> SIMElastoDynamics;
   typedef SIMPhaseField<Dim>                        SIMCrackField;
@@ -141,10 +141,10 @@ int runSimulator2 (char* infile)
   \param[in] context Input-file context for the time integrator
 */
 
-template<class Dim, class Integrator=NewmarkSIM>
-int runSimulator3 (char* infile, const char* context = "newmarksolver")
+template<class Dim, class Integrator=NewmarkSIM, class ElSolver>
+int runSimulatorIsolated (char* infile, const char* context = "newmarksolver")
 {
-  typedef SIMDynElasticity<Dim,Integrator> SIMElastoDynamics;
+  typedef SIMDynElasticity<Dim,Integrator,ElSolver> SIMElastoDynamics;
 
   utl::profiler->start("Model input");
   IFEM::cout <<"\n\n0. Parsing input file(s)."
@@ -188,61 +188,6 @@ int runSimulator3 (char* infile, const char* context = "newmarksolver")
 
 
 /*!
-  \brief Creates the combined fracture simulator and launches the simulation.
-  \param[in] infile The input file to parse
-  \param[in] timeslabs Use time-slab adaptive solver
-*/
-
-template<class Dim, class Integrator, class ElSolver,
-         template<class T1, class T2> class Cpl>
-int runSolver (char* infile, bool timeslabs)
-{
-  if (timeslabs)
-    return runSimulator2<Dim,Integrator,ElSolver,Cpl,SIMSolverTS>(infile);
-
-  return runSimulator2<Dim,Integrator,ElSolver,Cpl>(infile);
-}
-
-
-/*!
-  \brief Creates the combined fracture simulator and launches the simulation.
-  \param[in] infile The input file to parse
-  \param[in] poroel Use poroelastic solver
-  \param[in] adaptiv Use time-slab adaptive solver
-*/
-
-template<class Dim, class Integrator,
-         template<class T1, class T2> class Cpl>
-int runSolver (char* infile, bool poroel, bool adaptiv)
-{
-  if (poroel)
-    return runSolver<Dim,Integrator,SIMPoroElasticity<Dim>,Cpl>(infile,adaptiv);
-
-  return runSolver<Dim,Integrator,SIMElasticityWrap<Dim>,Cpl>(infile,adaptiv);
-}
-
-
-/*!
-  \brief Creates the combined fracture simulator and launches the simulation.
-  \param[in] infile The input file to parse
-  \param[in] coupling Coupling flag (0: none, 1: staggered, 2: semi-implicit)
-  \param[in] poroel Use poroelastic solver
-  \param[in] timeslabs Use time-slab adaptive solver
-*/
-
-template<class Dim, class Integrator=NewmarkSIM>
-int runSimulator1 (char* infile, char coupling, bool poroel, bool timeslabs)
-{
-  if (coupling == 1)
-    return runSolver<Dim,Integrator,SIMCoupled>(infile,poroel,timeslabs);
-  else if (coupling == 2)
-    return runSolver<Dim,Integrator,SIMCoupledSI>(infile,poroel,timeslabs);
-  else
-    return runSimulator3<Dim,Integrator>(infile); // No phase field coupling
-}
-
-
-/*!
   \brief Linear quasi-static solution driver.
 */
 
@@ -259,23 +204,45 @@ public:
 /*!
   \brief Creates the combined fracture simulator and launches the simulation.
   \param[in] infile The input file to parse
-  \param[in] integrator The time integrator to use (0=linear quasi-static,
-             no phase-field coupling, 1=linear Newmark, 2=Generalized alpha)
-  \param[in] coupling Coupling flag (0: none, 1: staggered, 2: semi-implicit)
-  \param[in] poroel Use poroelastic solver
   \param[in] timeslabs Use time-slab adaptive solver
 */
 
-template<class Dim>
-int runSimulator (char* infile, char integrator, char coupling,
-                  bool poroel, bool timeslabs)
+template<class Dim, class Integrator, class ElSolver,
+         template<class T1, class T2> class Cpl>
+int runSimulatorDispatchCombined (char* infile, bool timeslabs)
 {
-  if (integrator == 2)
-    return runSimulator1<Dim,GenAlphaSIM>(infile,coupling,poroel,timeslabs);
-  else if (integrator > 0)
-    return runSimulator1<Dim>(infile,coupling,poroel,timeslabs);
-  else
-    return runSimulator3<Dim,LinSIM>(infile,"staticsolver");
+  if (timeslabs)
+    return runSimulatorCombined<Dim,Integrator,ElSolver,Cpl,SIMSolverTS>(infile);
+  return runSimulatorCombined<Dim,Integrator,ElSolver,Cpl>(infile);
+}
+
+
+/*!
+  \brief Creates the combined fracture simulator and launches the simulation.
+  \param[in] infile The input file to parse
+  \param[in] integrator The time integrator to use (0=linear quasi-static,
+             no phase-field coupling, 1=linear Newmark, 2=Generalized alpha)
+  \param[in] coupling Coupling flag (0: none, 1: staggered, 2: semi-implicit)
+  \param[in] timeslabs Use time-slab adaptive solver
+*/
+
+template<class Dim, class ElSolver>
+int runSimulatorDispatch (char* infile, char integrator, char coupling, bool timeslabs)
+{
+  if (integrator == 0) {
+    return runSimulatorIsolated<Dim,LinSIM,ElSolver>(infile, "staticsolver");
+  } else if (integrator == 1) {
+    if (coupling == 0)
+      return runSimulatorIsolated<Dim,NewmarkSIM,SIMElasticityWrap<Dim>>(infile);
+    else if (coupling == 1)
+      return runSimulatorDispatchCombined<Dim,NewmarkSIM,ElSolver,SIMCoupled>(infile, timeslabs);
+    return runSimulatorDispatchCombined<Dim,NewmarkSIM,ElSolver,SIMCoupledSI>(infile, timeslabs);
+  }
+  if (coupling == 0)
+    return runSimulatorIsolated<Dim,GenAlphaSIM,SIMElasticityWrap<Dim>>(infile);
+  else if (coupling == 1)
+    return runSimulatorDispatchCombined<Dim,GenAlphaSIM,ElSolver,SIMCoupled>(infile, timeslabs);
+  return runSimulatorDispatchCombined<Dim,GenAlphaSIM,ElSolver,SIMCoupledSI>(infile, timeslabs);
 }
 
 
@@ -345,8 +312,13 @@ int main (int argc, char** argv)
   IFEM::getOptions().print(IFEM::cout);
   IFEM::cout << std::endl;
 
-  if (twoD)
-    return runSimulator<SIM2D>(infile,integrator,coupling,poroel,adaptive);
+  // Dispatch based on dimension and elasticity solver
+  if (twoD && poroel)
+    return runSimulatorDispatch<SIM2D, SIMPoroElasticity<SIM2D>>(infile,integrator,coupling,adaptive);
+  else if (twoD && !poroel)
+    return runSimulatorDispatch<SIM2D, SIMElasticityWrap<SIM2D>>(infile,integrator,coupling,adaptive);
+  else if (poroel)
+    return runSimulatorDispatch<SIM3D, SIMPoroElasticity<SIM3D>>(infile,integrator,coupling,adaptive);
   else
-    return runSimulator<SIM3D>(infile,integrator,coupling,poroel,adaptive);
+    return runSimulatorDispatch<SIM3D, SIMElasticityWrap<SIM3D>>(infile,integrator,coupling,adaptive);
 }
