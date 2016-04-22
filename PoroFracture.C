@@ -37,6 +37,7 @@ bool PoroFracture::parse (const TiXmlElement* elem)
 void PoroFracture::setMode (SIM::SolutionMode mode)
 {
   m_mode = mode;
+  this->PoroElasticity::setMode(mode);
   fracEl->setMode(mode);
   primsol.resize(fracEl->getNoSolutions());
 }
