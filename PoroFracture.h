@@ -37,6 +37,12 @@ public:
   //! \brief Parses a data section from an XML-element.
   virtual bool parse(const TiXmlElement* elem);
 
+  //! \brief Parses material properties from an XML-element.
+  virtual Material* parseMatProp (const TiXmlElement* elem, bool planestrain);
+
+  //! Defines the material properties
+  virtual void setMaterial(Material *mat);
+
   //! \brief Defines the solution mode before the element assembly is started.
   //! \param[in] mode The solution mode to use
   virtual void setMode(SIM::SolutionMode mode);

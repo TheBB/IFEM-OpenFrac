@@ -34,6 +34,21 @@ bool PoroFracture::parse (const TiXmlElement* elem)
 }
 
 
+Material* PoroFracture::parseMatProp (const TiXmlElement* elem, bool planestrain)
+{
+  Material *mat = this->PoroElasticity::parseMatProp(elem, planestrain);
+  fracEl->setMaterial(mat);
+  return mat;
+}
+
+
+void PoroFracture::setMaterial (Material* mat)
+{
+  this->PoroElasticity::setMaterial(mat);
+  fracEl->setMaterial(mat);
+}
+
+
 void PoroFracture::setMode (SIM::SolutionMode mode)
 {
   m_mode = mode;
