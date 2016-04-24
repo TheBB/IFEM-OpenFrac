@@ -54,6 +54,9 @@ void PoroFracture::setMode (SIM::SolutionMode mode)
   m_mode = mode;
   this->PoroElasticity::setMode(mode);
   fracEl->setMode(mode);
+  fracEl->eKm = uu_K + 1;
+  fracEl->eKg = 0;
+  fracEl->eM = 0;
   primsol.resize(fracEl->getNoSolutions());
 }
 
