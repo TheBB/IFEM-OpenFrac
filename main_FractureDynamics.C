@@ -28,6 +28,7 @@
 #include "NewmarkNLSIM.h"
 #include "NonLinSIM.h"
 #include "ASMstruct.h"
+#include "ASMmxBase.h"
 #include "AppCommon.h"
 
 
@@ -145,10 +146,10 @@ int runSimulator2 (char* infile)
   \param[in] context Input-file context for the time integrator
 */
 
-template<class Dim, class Integrator=NewmarkSIM>
+template<class Dim, class Integrator, class ElSolver>
 int runSimulator3 (char* infile, const char* context)
 {
-  typedef SIMDynElasticity<Dim,Integrator> SIMElastoDynamics;
+  typedef SIMDynElasticity<Dim,Integrator,ElSolver> SIMElastoDynamics;
 
   utl::profiler->start("Model input");
   IFEM::cout <<"\n\n0. Parsing input file(s)."
@@ -188,6 +189,28 @@ int runSimulator3 (char* infile, const char* context)
 
   delete exporter;
   return res;
+}
+
+
+/*!
+  \brief Creates and launches a stand-alone elasticity simulator (no coupling).
+  \param[in] infile The input file to parse
+  \param[in] poroel Use poroelastic solver
+  \param[in] context Input-file context for the time integrator
+*/
+
+template<class Dim, class Integrator>
+int runSimulator4 (char* infile, bool poroel,
+                   const char* context = "newmarksolver")
+{
+  if (poroel)
+#ifdef IFEM_HAS_POROELASTIC
+    return runSimulator3<Dim,Integrator,SIMPoroElasticity<Dim>>(infile,context);
+#else
+    return 99; // Built without the poroelastic coupling
+#endif
+
+  return runSimulator3<Dim,Integrator,SIMElasticityWrap<Dim>>(infile,context);
 }
 
 
@@ -246,7 +269,7 @@ int runSimulator1 (char* infile, char coupling, bool poroel, bool timeslabs)
   else if (coupling == 2)
     return runSolver<Dim,Integrator,SIMCoupledSI>(infile,poroel,timeslabs);
   else // No phase field coupling
-    return runSimulator3<Dim,Integrator>(infile,Integrator::inputContext);
+    return runSimulator4<Dim,Integrator>(infile,poroel,Integrator::inputContext);
 }
 
 
@@ -281,7 +304,7 @@ int runSimulator (char* infile, char integrator, char coupling,
 {
   switch (integrator) {
   case 0:
-    return runSimulator3<Dim,LinSIM>(infile,"staticsolver");
+    return runSimulator4<Dim,LinSIM>(infile,poroel,"staticsolver");
   case 1:
     return runSimulator1<Dim>(infile,coupling,poroel,timeslabs);
   case 2:
@@ -313,6 +336,7 @@ int main (int argc, char** argv)
   bool twoD = false;
   bool poroel = false;
   bool adaptive = false;
+  ASMmxBase::Type = ASMmxBase::NONE;
 
   IFEM::Init(argc,argv,"Fracture dynamics solver");
 
@@ -321,6 +345,8 @@ int main (int argc, char** argv)
       ; // ignore the obsolete option
     else if (!strcmp(argv[i],"-2D"))
       twoD = SIMElasticity<SIM2D>::planeStrain = true;
+    else if (!strcmp(argv[i],"-mixed"))
+      ASMmxBase::Type = ASMmxBase::FULL_CONT_RAISE_BASIS1;
     else if (!strcmp(argv[i],"-nocrack"))
       coupling = 0;
     else if (!strcmp(argv[i],"-semiimplicit"))
@@ -351,11 +377,11 @@ int main (int argc, char** argv)
   if (!infile)
   {
     std::cout <<"usage: "<< argv[0]
-              <<" <inputfile> [-dense|-spr|-superlu[<nt>]|-samg|-petsc]\n"
-              <<"       [-lag|-spec|-LR] [-2D] [-nGauss <n>]\n       [-nocrack|"
-              <<"-semiimplicit] [-[l|q]static|-GA|-HHT] [-poro] [-adaptive]\n"
-              <<"       [-vtf <format> [-nviz <nviz>] [-nu <nu>] [-nv <nv]"
-              <<" [-nw <nw>]] [-hdf5] [-principal]\n"<< std::endl;
+              <<" <inputfile> [-dense|-spr|-superlu[<nt>]|-samg|-petsc]\n      "
+              <<" [-lag|-spec|-LR] [-2D] [-mixed] [-nGauss <n>]\n       [-nocra"
+              <<"ck|-semiimplicit] [-[l|q]static|-GA|-HHT] [-poro] [-adaptive]"
+              <<"\n       [-vtf <format> [-nviz <nviz>] [-nu <nu>] [-nv <nv]"
+              <<" [-nw <nw>]]\n       [-hdf5] [-principal]\n"<< std::endl;
     return 0;
   }
 
