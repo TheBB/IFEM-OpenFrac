@@ -241,6 +241,14 @@ bool FractureElasticity::evalStress (double lambda, double mu, double Gc,
 }
 
 
+bool FractureElasticity::evalStress (double lambda, double mu, double Gc,
+                                     const SymmTensor& epsilon,
+                                     double* Phi, SymmTensor& sigma) const
+{
+  return this->evalStress(lambda,mu,Gc,epsilon,Phi,sigma,nullptr,true);
+}
+
+
 double FractureElasticity::getStressDegradation (const Vector& N,
                                                  const Vectors& eV) const
 {
@@ -359,35 +367,6 @@ bool FractureElasticity::evalInt (LocalIntegral& elmInt,
 }
 
 
-bool FractureElasticity::evalBou (LocalIntegral& elmInt,
-                                  const FiniteElement& fe, const Vec3& X,
-                                  const Vec3& normal) const
-{
-  if (!tracFld && !fluxFld)
-  {
-    std::cerr <<" *** FractureElasticity::evalBou: No tractions."<< std::endl;
-    return false;
-  }
-  else if (!eS)
-  {
-    if (m_mode == SIM::RECOVERY) return true;
-    std::cerr <<" *** FractureElasticity::evalBou: No load vector."<< std::endl;
-    return false;
-  }
-
-  // Evaluate the surface traction
-  Vec3 T = this->getTraction(X,normal);
-
-  // Integrate the force vector
-  Vector& ES = static_cast<ElmMats&>(elmInt).b[eS-1];
-  for (size_t a = 1; a <= fe.N.size(); a++)
-    for (unsigned short int i = 1; i <= nsd; i++)
-      ES(nsd*(a-1)+i) += T[i-1]*fe.N(a)*fe.detJxW;
-
-  return true;
-}
-
-
 bool FractureElasticity::evalSol (Vector& s,
                                   const FiniteElement& fe, const Vec3& X,
                                   const std::vector<int>& MNPC) const
@@ -501,11 +480,46 @@ bool FractureElasticity::evalSol (Vector& s, const Vectors& eV,
 }
 
 
-bool FractureElasticity::evalStress (double lambda, double mu, double Gc,
-                                     const SymmTensor& epsilon,
-                                     double* Phi, SymmTensor& sigma) const
+double FractureElasticity::evalPhaseField (Vec3& gradD,
+                                           const Vectors& eV,
+                                           const Vector& N,
+                                           const Matrix& dNdX) const
 {
-  return this->evalStress(lambda,mu,Gc,epsilon,Phi,sigma,nullptr,true);
+  if (eV.size() <= eC)
+  {
+    std::cerr <<" *** FractureElasticity::evalPhaseField:"
+              <<" Missing phase field solution vector."<< std::endl;
+    return -1.1;
+
+  }
+  else if (eV[eC].empty()) // No phase field ==> no crack yet
+  {
+    gradD = 0.0;
+    return 0.0;
+  }
+  else if (eV[eC].size() != N.size())
+  {
+    std::cerr <<" *** FractureElasticity::evalPhaseField:"
+              <<" Invalid phase field vector.\n     size(eC) = "
+              << eV[eC].size() <<"   size(N) = "<< N.size() << std::endl;
+    return -1.2;
+  }
+
+  // Invert the nodal phase field values, D = 1 - C,
+  // since that is the convention used in the Miehe papers
+  Vector eD(eV[eC].size()), tmp(nsd);
+  for (size_t i = 0; i < eD.size(); i++)
+    eD[i] = 1.0 - eV[eC][i];
+
+  // Compute the phase field gradient, dD/dX
+  if (dNdX.multiply(eD,tmp,true))
+    gradD = tmp;
+  else
+    return -2.0;
+
+  // Compute the phase field value, filtering out values outside [0.0,1.0]
+  double d = eD.dot(N);
+  return d > 1.0 ? 1.0 : (d < 0.0 ? 0.0 : d);
 }
 
 
