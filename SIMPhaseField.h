@@ -244,7 +244,7 @@ public:
   const Vector& getGlobalNorms() const { return norm; }
 
   //! \brief Returns a const reference to the current solution.
-  const Vector& getSolution(int = 0) { return phasefield; }
+  const Vector& getSolution(int = 0) const { return phasefield; }
 
   //! \brief Updates the solution vector.
   void setSolution(const Vector& vec) { phasefield = vec; }
