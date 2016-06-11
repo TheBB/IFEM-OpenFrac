@@ -20,6 +20,7 @@
 #include "LRSpline/LRSplineSurface.h"
 #endif
 #include <fstream>
+#include <numeric>
 
 
 /*!
