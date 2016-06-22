@@ -22,9 +22,24 @@
 #include "tinyxml.h"
 
 
+class PoroFractureElasticityVoigt : public FractureElasticityVoigt
+{
+public:
+  PoroFractureElasticityVoigt(IntegrandBase *parent, unsigned short int n)
+    : FractureElasticityVoigt(parent, n)
+  {}
+
+  void setMode(SIM::SolutionMode mode)
+  {
+    this->FractureElasticityVoigt::setMode(mode);
+    iS = PoroElasticity::Fu + 1;
+  }
+};
+
+
 PoroFracture::PoroFracture (unsigned short int n) : PoroElasticity(n)
 {
-  fracEl = new FractureElasticityVoigt(this,n);
+  fracEl = new PoroFractureElasticityVoigt(this,n);
 
   L_per = 0.01;
   d_min = 0.1;
