@@ -143,6 +143,7 @@ int runSim6 (char* infile, const char* context)
 
   // Time-step loop
   frac.init(TimeStep());
+  frac.setInitialConditions();
 
   DataExporter* exporter = nullptr;
   if (elastoSim.opt.dumpHDF5(infile))

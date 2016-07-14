@@ -17,6 +17,7 @@
 #include "NewmarkSIM.h"
 #include "SIMElasticityWrap.h"
 #include "FractureElasticityVoigt.h"
+#include "InitialConditionHandler.h"
 #ifdef IFEM_HAS_POROELASTIC
 #include "PoroFracture.h"
 #endif
@@ -59,7 +60,14 @@ public:
 
     bool ok = this->setMode(SIM::INIT);
     this->setQuadratureRule(Dim::opt.nGauss[0],true);
+    this->registerField("solution", getSolution(0));
     return ok;
+  }
+
+  //! \brief Set the initial conditions
+  virtual void setInitialConditions()
+  {
+    SIM::setInitialConditions(*this);
   }
 
   //! \brief Saves the converged results of a given time step to VTF file.

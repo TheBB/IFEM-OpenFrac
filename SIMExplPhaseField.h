@@ -44,6 +44,9 @@ public:
   //! \brief Initializes the problem.
   bool init(const TimeStep&);
 
+  //! \brief Set the initial conditions
+  void setInitialConditions() {}
+
   //! \brief Saves the converged results of a given time step to VTF file.
   bool saveStep(const TimeStep& tp, int& nBlock);
 
