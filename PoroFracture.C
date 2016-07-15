@@ -162,6 +162,83 @@ const RealArray* PoroFracture::getTensileEnergy () const
 }
 
 
+size_t PoroFracture::getNoFields(int fld) const
+{
+  size_t super = this->PoroElasticity::getNoFields(fld);
+  if (fld > 1)
+    super += nsd * (nsd + 1) / 2 + 1;
+  return super;
+}
+
+
+std::string PoroFracture::getField2Name(size_t i, const char *prefix) const
+{
+  if (i < this->PoroElasticity::getNoFields(2))
+    return this->PoroElasticity::getField2Name(i, prefix);
+
+  i -= this->PoroElasticity::getNoFields(2);
+  std::string name;
+
+  if (i == 0)
+    name = "w";
+  else {
+    static const char* s[][6] = {{"x", "y", "xy"},
+                                 {"x", "y", "z", "yz", "xz", "xy"}};
+    size_t ncomps = nsd * (nsd + 1) / 2;
+    name = "perm" + std::string("_") + s[nsd-2][(i-1) % ncomps];
+  }
+
+  if (!prefix)
+    return name;
+  return prefix + std::string(" ") + name;
+}
+
+
+bool PoroFracture::evalSol(Vector& s, const FiniteElement& fe,
+                           const Vec3& X, const std::vector<int>& MNPC) const
+{
+  if (!this->PoroElasticity::evalSol(s, fe, X, MNPC))
+    return false;
+
+  Vector eV;
+  utl::gather(MNPC, 1, fracEl->getCVec(), eV);
+
+  Vector eDtemp, eD(nsd * fe.N.size());
+  utl::gather(MNPC, nsd+1, primsol.front(), eDtemp);
+  for (size_t i = 0; i < nsd; i++)
+    for (size_t bfun = 0; bfun < fe.N.size(); bfun++)
+      eD[nsd*bfun+i] = eDtemp[(nsd+1)*bfun+i];
+
+  SymmTensor K(nsd);
+  double w = this->formCrackedPermeabilityTensor(K, eV, eD, fe, X);
+
+  s.insert(s.end(), w);
+
+  const PoroMaterial* pmat = dynamic_cast<const PoroMaterial*>(material);
+  if (!pmat) return false;
+
+  Vec3 permeability = pmat->getPermeability(X);
+  for (size_t i = 1; i <= K.dim(); i++)
+    K(i,i) += permeability(i);
+
+  if (nsd == 2) {
+    s.insert(s.end(), K(1,1));
+    s.insert(s.end(), K(2,2));
+    s.insert(s.end(), K(1,2));
+  }
+  else if (nsd == 3) {
+    s.insert(s.end(), K(1,1));
+    s.insert(s.end(), K(2,2));
+    s.insert(s.end(), K(3,3));
+    s.insert(s.end(), K(2,3));
+    s.insert(s.end(), K(1,3));
+    s.insert(s.end(), K(1,2));
+  }
+
+  return true;
+}
+
+
 bool PoroFracture::evalElasticityMatrices (ElmMats& elMat, const Matrix&,
                                            const FiniteElement& fe,
                                            const Vec3& X) const
@@ -179,10 +256,32 @@ bool PoroFracture::evalElasticityMatrices (ElmMats& elMat, const Matrix&,
 */
 
 double PoroFracture::formCrackedPermeabilityTensor (SymmTensor& Kcrack,
-                                                    const Vectors& eV,
+                                                    const Vector& eV,
+                                                    const Vector& eD,
                                                     const FiniteElement& fe,
                                                     const Vec3& X) const
 {
+
+  if (!eV.empty())
+  {
+    if (fabs(eV[0] - eV[2]) > 1e-10)
+      std::cout << ">>> " << (eV[0] - eV[2]) << std::endl;
+    if (fabs(eV[1] - eV[3]) > 1e-10)
+      std::cout << ">>> " << (eV[1] - eV[3]) << std::endl;
+    if (fabs(eD[0] - eD[4]) > 1e-10)
+      std::cout << ">>> " << (eD[0] - eD[4]) << std::endl;
+    if (fabs(eD[2] - eD[6]) > 1e-10)
+      std::cout << ">>> " << (eD[2] - eD[6]) << std::endl;
+    if (fabs(eD[1]) > 1e-10)
+      std::cout << ">>> eD[1] " << eD[1] << std::endl;
+    if (fabs(eD[3]) > 1e-10)
+      std::cout << ">>> eD[3] " << eD[3] << std::endl;
+    if (fabs(eD[5]) > 1e-10)
+      std::cout << ">>> eD[5] " << eD[5] << std::endl;
+    if (fabs(eD[7]) > 1e-10)
+      std::cout << ">>> eD[7] " << eD[7] << std::endl;
+  }
+
   Vec3 gradD; // Evaluate the phase field value and gradient
   double d = fracEl->evalPhaseField(gradD,eV,fe.N,fe.dNdX);
   if (d < 0.0)
@@ -207,19 +306,23 @@ double PoroFracture::formCrackedPermeabilityTensor (SymmTensor& Kcrack,
   }
 
   Tensor F(nsd); // Calculate the deformation gradient
-  if (!this->formDefGradient(eV.front(),fe.N,fe.dNdX,X.x,F))
+  if (!this->formDefGradient(eD,fe.N,fe.dNdX,X.x,F))
     return -2.0;
 
   // Compute the inverse right Cauchy-Green tensor (C^-1)
   if (Kcrack.rightCauchyGreen(F).inverse() == 0.0)
     return -3.0;
 
+  // std::cout << "gradD = " << gradD << " F = " << F << " Cinv = " << Kcrack;
+
   // Compute the symmetric tensor C^-1 - (C^-1*n0)otimes(C^-1*n0)
   // (the term in the bracket [] of eq. (108) in Miehe2015pfm3)
   Vec3 CigD = Kcrack*gradD; // C^-1*gradD
+  // std::cout << "CigD = " << CigD << std::endl << std::endl;
   for (unsigned short int j = 1; j <= nsd; j++)
     for (unsigned short int i = 1; i <= j; i++)
       Kcrack(i,j) -= CigD(i)*CigD(j)/d2;
+  // std::cout << "Bracket term = " << Kcrack << std::endl;
 
   // Compute the perpendicular crack stretch
   // lambda = gradD*gradD / gradD*C^-1*gradD (see eq. (106))
@@ -237,6 +340,7 @@ double PoroFracture::formCrackedPermeabilityTensor (SymmTensor& Kcrack,
   // Compute the permeability tensor, scale by d^eps*Kc*w^2*J (see eq. (108))
   double w = lambda*L_per - L_per; // Crack opening (see eq. (107))
   Kcrack *= pow(d,eps)*Kc*w*w*F.det();
+  // std::cout << "Final = " << Kcrack << std::endl;
   return w < 0.0 ? 0.0 : w;
 }
 
@@ -246,7 +350,23 @@ bool PoroFracture::formPermeabilityTensor (SymmTensor& K,
                                            const FiniteElement& fe,
                                            const Vec3& X) const
 {
-  if (this->formCrackedPermeabilityTensor(K,eV,fe,X) < 0.0)
+  unsigned short int eC = fracEl->geteC();
+
+  if (eV.size() <= eC)
+  {
+    std::cerr <<" *** PoroFracture::formPermeabilityTensor:"
+              <<" Missing phase field solution vector."<< std::endl;
+    return false;
+  }
+  else if (!eV[eC].empty() && eV[eC].size() != fe.N.size())
+  {
+    std::cerr <<" *** PoroFracture::formPermeabilityTensor:"
+              <<" Invalid phase field vector.\n     size(eC) = "
+              << eV[eC].size() <<"   size(N) = "<< fe.N.size() << std::endl;
+    return false;
+  }
+
+  if (this->formCrackedPermeabilityTensor(K,eV[fracEl->geteC()],eV.front(),fe,X) < 0.0)
     return false;
 
   const PoroMaterial* pmat = dynamic_cast<const PoroMaterial*>(material);

@@ -83,11 +83,11 @@ public:
 
   //! \brief Evaluates the phase field and gradient at current point.
   //! \param[out] gradD Phase field gradient at current point
-  //! \param[in] eV Element solution vectors
+  //! \param[in] eV Element phase field coefficients
   //! \param[in] N Basis function values at current point
   //! \param[in] dNdX Basis function gradients at current point
   //! \return Phase field value at current point
-  double evalPhaseField(Vec3& gradD, const Vectors& eV,
+  double evalPhaseField(Vec3& gradD, const Vector& eV,
                         const Vector& N, const Matrix& dNdX) const;
 
   //! \brief Returns a pointer to the Gauss-point tensile energy array.
@@ -104,6 +104,12 @@ public:
   //! \brief Returns a pointer to an Integrand for solution norm evaluation.
   //! \note Not implemented for the tensor-based formulation.
   virtual NormBase* getNormIntegrand(AnaSol*) const { return nullptr; }
+
+  //! \brief Retursn teh crack phase field values at nodal points
+  virtual Vector getCVec() const { return myCVec; }
+
+  //! \brief Returns the zero-based index to the element phase field vector
+  virtual unsigned short int geteC() const { return eC; }
 
 protected:
   //! \brief Evaluates the stress tensor and tensile energy at current point.

@@ -82,6 +82,13 @@ public:
   //! \brief Returns a pointer to the Gauss-point tensile energy array.
   virtual const RealArray* getTensileEnergy() const;
 
+  virtual size_t getNoFields(int fld) const;
+
+  virtual std::string getField2Name(size_t i, const char *prefix) const;
+
+  virtual bool evalSol(Vector& s, const FiniteElement& fe,
+                       const Vec3& X, const std::vector<int>& MNPC) const;
+
 protected:
   //! \brief Computes the elasticity matrices for a quadrature point.
   //! \param elmInt The element matrix object to receive the contributions
@@ -108,7 +115,8 @@ protected:
   //! \param[in] X Cartesian coordinates of current integration point
   //! \return Estimated crack opening
   double formCrackedPermeabilityTensor(SymmTensor& Kcrack,
-                                       const Vectors& eV,
+                                       const Vector& eV,
+                                       const Vector& eD,
                                        const FiniteElement& fe,
                                        const Vec3& X) const;
 

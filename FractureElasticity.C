@@ -481,35 +481,21 @@ bool FractureElasticity::evalSol (Vector& s, const Vectors& eV,
 
 
 double FractureElasticity::evalPhaseField (Vec3& gradD,
-                                           const Vectors& eV,
+                                           const Vector& eV,
                                            const Vector& N,
                                            const Matrix& dNdX) const
 {
-  if (eV.size() <= eC)
-  {
-    std::cerr <<" *** FractureElasticity::evalPhaseField:"
-              <<" Missing phase field solution vector."<< std::endl;
-    return -1.1;
-
-  }
-  else if (eV[eC].empty()) // No phase field ==> no crack yet
+  if (eV.empty()) // No phase field ==> no crack yet
   {
     gradD = 0.0;
     return 0.0;
   }
-  else if (eV[eC].size() != N.size())
-  {
-    std::cerr <<" *** FractureElasticity::evalPhaseField:"
-              <<" Invalid phase field vector.\n     size(eC) = "
-              << eV[eC].size() <<"   size(N) = "<< N.size() << std::endl;
-    return -1.2;
-  }
 
   // Invert the nodal phase field values, D = 1 - C,
   // since that is the convention used in the Miehe papers
-  Vector eD(eV[eC].size()), tmp(nsd);
+  Vector eD(eV.size()), tmp(nsd);
   for (size_t i = 0; i < eD.size(); i++)
-    eD[i] = 1.0 - eV[eC][i];
+    eD[i] = 1.0 - eV[i];
 
   // Compute the phase field gradient, dD/dX
   if (dNdX.multiply(eD,tmp,true))
