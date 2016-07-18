@@ -118,7 +118,8 @@ protected:
                                        const Vector& eV,
                                        const Vector& eD,
                                        const FiniteElement& fe,
-                                       const Vec3& X) const;
+                                       const Vec3& X,
+                                       Vector& extra) const;
 
 private:
   FractureElasticity* fracEl; //!< Integrand for tangent stiffness evaluation
