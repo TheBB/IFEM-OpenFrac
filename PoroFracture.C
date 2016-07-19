@@ -294,7 +294,7 @@ double PoroFracture::formCrackedPermeabilityTensor (SymmTensor& Kcrack,
   Vec3 gradD; // Evaluate the phase field value and gradient
   double d = fracEl->evalPhaseField(gradD,eV,fe.N,fe.dNdX);
 
-  gradD[0] = 0.0;               // FIXME
+  // gradD[1] = 0.0;               // FIXME
 
   extra[3] = gradD[0];
   extra[4] = gradD[1];
@@ -315,16 +315,16 @@ double PoroFracture::formCrackedPermeabilityTensor (SymmTensor& Kcrack,
   extra[5] = d;
 
   double d2 = gradD.length2();
-  if (d2 <= 0.0) {              // FIXME
-    gradD[1] = 1.0;
-    d2 = gradD.length2();
-  }
-  // if (d2 <= 0.0)
-  // {
-  //   std::cerr <<" *** PoroFracture::formCrackedPermeabilityTensor(X = "<< X
-  //             <<")\n     Zero phase field gradient: "<< gradD << std::endl;
-  //   return -1.0;
+  // if (d2 <= 0.0) {              // FIXME
+  //   gradD[0] = 1.0;
+  //   d2 = gradD.length2();
   // }
+  if (d2 <= 0.0)
+  {
+    std::cerr <<" *** PoroFracture::formCrackedPermeabilityTensor(X = "<< X
+              <<")\n     Zero phase field gradient: "<< gradD << std::endl;
+    return -1.0;
+  }
 
   extra[6] = d2;
 
@@ -332,9 +332,9 @@ double PoroFracture::formCrackedPermeabilityTensor (SymmTensor& Kcrack,
   if (!this->formDefGradient(eD,fe.N,fe.dNdX,X.x,F))
     return -2.0;
 
-  F(1,1) = 1.0;                 // FIXME
-  F(1,2) = 0.0;                 // FIXME
-  F(2,1) = 0.0;                 // FIXME
+  // F(1,1) = 1.0;                 // FIXME
+  // F(1,2) = 0.0;                 // FIXME
+  // F(2,1) = 0.0;                 // FIXME
   // F(2,2) = 1.0;                 // FIXME
 
   extra[7] = F(1,1);
@@ -371,8 +371,13 @@ double PoroFracture::formCrackedPermeabilityTensor (SymmTensor& Kcrack,
   // std::cout << "CigD = " << CigD << std::endl << std::endl;
   for (unsigned short int j = 1; j <= nsd; j++)
     for (unsigned short int i = 1; i <= j; i++)
-      Kcrack(i,j) -= sqrt(CigD(i)*CigD(j)/d2);
+      // Kcrack(i,j) -= sqrt(CigD(i)*CigD(j)/d2);
+      Kcrack(i,j) -= CigD(i)*CigD(j)/d2;
   // std::cout << "Bracket term = " << Kcrack << std::endl;
+
+  // Kcrack(1,2) = 0.0;
+  // Kcrack(2,1) = 0.0;
+  // Kcrack(2,2) = 0.0;
 
   extra[19] = Kcrack(2,2);
 
@@ -391,6 +396,11 @@ double PoroFracture::formCrackedPermeabilityTensor (SymmTensor& Kcrack,
     Kcrack.zero();
     return 0.0;
   }
+
+  // Kcrack(1,1) = 1.0;
+  // Kcrack(2,1) = 0.0;
+  // Kcrack(1,2) = 0.0;
+  // Kcrack(2,2) = 0.0;
 
   // Compute the permeability tensor, scale by d^eps*Kc*w^2*J (see eq. (108))
   double w = lambda*L_per - L_per; // Crack opening (see eq. (107))
