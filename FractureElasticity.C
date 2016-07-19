@@ -20,6 +20,8 @@
 #include "Tensor4.h"
 #include "Tensor.h"
 #include "Profiler.h"
+#include "IFEM.h"
+#include "tinyxml.h"
 
 #ifndef epsZ
 //! \brief Zero tolerance for strains.
@@ -28,7 +30,7 @@
 
 
 FractureElasticity::FractureElasticity (unsigned short int n)
-  : Elasticity(n), mySol(primsol)
+  : Elasticity(n), crackPressure(0.0), mySol(primsol)
 {
   alpha = 0.0;
   this->registerVector("phasefield",&myCVec);
@@ -38,7 +40,7 @@ FractureElasticity::FractureElasticity (unsigned short int n)
 
 FractureElasticity::FractureElasticity (IntegrandBase* parent,
                                         unsigned short int n)
-  : Elasticity(n), mySol(parent->getSolutions())
+  : Elasticity(n), crackPressure(0.0), mySol(parent->getSolutions())
 {
   alpha = 0.0;
   parent->registerVector("phasefield",&myCVec);
@@ -46,6 +48,15 @@ FractureElasticity::FractureElasticity (IntegrandBase* parent,
   eC = 3; // and fourth vector is the phase field
 }
 
+bool FractureElasticity::parse(const TiXmlElement* elem)
+{
+  if (strcasecmp(elem->Value(), "crackpressure"))
+    return this->Elasticity::parse(elem);
+
+  utl::getAttribute(elem, "value", crackPressure);
+  IFEM::cout << "\tCrack pressure: " << crackPressure << std::endl;
+  return true;
+}
 
 void FractureElasticity::setMode (SIM::SolutionMode mode)
 {
@@ -361,7 +372,16 @@ bool FractureElasticity::evalInt (LocalIntegral& elmInt,
   }
 
   if (eS) // Integrate the load vector due to gravitation and other body forces
+  {
     this->formBodyForce(elMat.b[eS-1],fe.N,X,fe.detJxW);
+
+    if (crackPressure) {
+      double phase = elMat.vec[eC].dot(fe.N);
+      for (size_t i = 0; i < fe.N.size(); i++)
+        for (size_t j = 0; j < nsd; j++)
+          elMat.b[eS-1][i*nsd+j] += fe.dNdX(i+1,j+1) * phase * crackPressure * fe.detJxW;
+    }
+  }
 
   return true;
 }

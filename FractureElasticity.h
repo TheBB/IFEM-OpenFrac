@@ -36,6 +36,9 @@ public:
   //! \brief Empty destructor.
   virtual ~FractureElasticity() {}
 
+  //! \brief Parses a data section from an XML-element.
+  virtual bool parse(const TiXmlElement* elem);
+
   //! \brief Sets the number of solution variables per node.
   void setVar(unsigned short int n) { npv = n; }
 
@@ -126,12 +129,13 @@ protected:
   //! \brief Evaluates the stress degradation function \a g(c) at current point.
   double getStressDegradation(const Vector& N, const Vectors& eV) const;
 
-private:
+protected:
   unsigned short int eC; //!< Zero-based index to element phase field vector
 
-protected:
   double alpha;  //!< Relaxation factor for the crack phase field
   Vector myCVec; //!< Crack phase field values at nodal points
+
+  double crackPressure;    //!< Applied pressure in the crack
 
   mutable RealArray myPhi; //!< Tensile energy density at integration points
   Vectors&          mySol; //!< Primary solution vectors for current patch

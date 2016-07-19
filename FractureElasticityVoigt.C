@@ -306,7 +306,16 @@ bool FractureElasticityVoigt::evalInt (LocalIntegral& elmInt,
   }
 
   if (eS) // Integrate the load vector due to gravitation and other body forces
+  {
     this->formBodyForce(elMat.b[eS-1],fe.N,X,fe.detJxW);
+
+    if (crackPressure) {
+      double phase = elMat.vec[eC].dot(fe.N);
+      for (size_t i = 0; i < fe.N.size(); i++)
+        for (size_t j = 0; j < nsd; j++)
+          elMat.b[eS-1][i*nsd+j] += fe.dNdX(i+1,j+1) * phase * crackPressure * fe.detJxW;
+    }
+  }
 
   return true;
 }
