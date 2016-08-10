@@ -22,6 +22,7 @@
 #include "Profiler.h"
 #include "IFEM.h"
 #include "tinyxml.h"
+#include "Functions.h"
 
 #ifndef epsZ
 //! \brief Zero tolerance for strains.
@@ -30,7 +31,7 @@
 
 
 FractureElasticity::FractureElasticity (unsigned short int n)
-  : Elasticity(n), crackPressure(0.0), mySol(primsol)
+  : Elasticity(n), crackPressure(nullptr), mySol(primsol)
 {
   alpha = 0.0;
   this->registerVector("phasefield",&myCVec);
@@ -40,7 +41,7 @@ FractureElasticity::FractureElasticity (unsigned short int n)
 
 FractureElasticity::FractureElasticity (IntegrandBase* parent,
                                         unsigned short int n)
-  : Elasticity(n), crackPressure(0.0), mySol(parent->getSolutions())
+  : Elasticity(n), crackPressure(nullptr), mySol(parent->getSolutions())
 {
   alpha = 0.0;
   parent->registerVector("phasefield",&myCVec);
@@ -53,8 +54,11 @@ bool FractureElasticity::parse(const TiXmlElement* elem)
   if (strcasecmp(elem->Value(), "crackpressure"))
     return this->Elasticity::parse(elem);
 
-  utl::getAttribute(elem, "value", crackPressure);
-  IFEM::cout << "\tCrack pressure: " << crackPressure << std::endl;
+  std::string type;
+  utl::getAttribute(elem, "type", type);
+  IFEM::cout << "\tCrack pressure function";
+  crackPressure = utl::parseRealFunc(utl::getValue(elem, "crackpressure"), type);
+  IFEM::cout << std::endl;
   return true;
 }
 
@@ -376,10 +380,11 @@ bool FractureElasticity::evalInt (LocalIntegral& elmInt,
     this->formBodyForce(elMat.b[eS-1],fe.N,X,fe.detJxW);
 
     if (crackPressure) {
+      double cp = (*crackPressure)(X);
       double phase = elMat.vec[eC].dot(fe.N);
       for (size_t i = 0; i < fe.N.size(); i++)
         for (size_t j = 0; j < nsd; j++)
-          elMat.b[eS-1][i*nsd+j] += fe.dNdX(i+1,j+1) * phase * crackPressure * fe.detJxW;
+          elMat.b[eS-1][i*nsd+j] += fe.dNdX(i+1,j+1) * phase * cp * fe.detJxW;
     }
   }
 

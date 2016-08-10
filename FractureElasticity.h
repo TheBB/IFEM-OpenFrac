@@ -135,7 +135,7 @@ protected:
   double alpha;  //!< Relaxation factor for the crack phase field
   Vector myCVec; //!< Crack phase field values at nodal points
 
-  double crackPressure;    //!< Applied pressure in the crack
+  RealFunc* crackPressure; //!< Applied pressure in the crack
 
   mutable RealArray myPhi; //!< Tensile energy density at integration points
   Vectors&          mySol; //!< Primary solution vectors for current patch
