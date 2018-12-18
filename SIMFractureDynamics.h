@@ -348,7 +348,11 @@ public:
       IFEM::cout <<"\nTransferring "<< hsol.size()
                  <<" history variables to new mesh for "<< this->S2.getName()
                  << std::endl;
+      IFEM::cout << __PRETTY_FUNCTION__ << std::endl;
       this->S2.transferHistory(hsol,oldBasis);
+      IFEM::cout <<"\nTransferred "<< hsol.size()
+                 <<" history variables to new mesh for "<< this->S2.getName()
+                 << std::endl;
     }
 
     return elements.size();

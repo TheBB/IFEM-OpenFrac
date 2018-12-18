@@ -468,19 +468,28 @@ public:
       {
         switch (transferOp) {
         case 'P':
+          IFEM::cout << "transfer P" << std::endl;
           oldHn.resize(pch->getNoNodes());
           for (size_t i = 0; i < oldHn.size(); i++)
             oldHn[i] = oldH[pch->getNodeID(1+i)-1];
+          IFEM::cout << "Calling transferCntrlPtVars" << std::endl;
           ok &= pch->transferCntrlPtVars(basis,oldHn,newHp,nGp);
+          IFEM::cout << "Called" << std::endl;
           break;
         case 'N':
+          IFEM::cout << "transfer N" << std::endl;
           jtH = itH + basis->nElements()*pow(nGp, static_cast<int>(Dim::dimension));
+          IFEM::cout << "Calling transferGaussPtVarsN" << std::endl;
           ok &= pch->transferGaussPtVarsN(basis,RealArray(itH,jtH),newHp,nGp);
+          IFEM::cout << "Called" << std::endl;
           itH = jtH;
           break;
         default:
+          IFEM::cout << "transfer ?" << std::endl;
           jtH = itH + basis->nElements()*pow(nGp, static_cast<int>(Dim::dimension));
+          IFEM::cout << "Calling transferGaussPtVars" << std::endl;
           ok &= pch->transferGaussPtVars(basis,RealArray(itH,jtH),newHp,nGp);
+          IFEM::cout << "Called" << std::endl;
           itH = jtH;
         }
         newH.insert(newH.end(),newHp.begin(),newHp.end());
